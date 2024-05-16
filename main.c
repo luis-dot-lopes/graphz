@@ -46,7 +46,7 @@ typedef struct
 } Graph;
 
 void
-draw_graph(Graph* g)
+draw_graph(Graph* g, size_t highlight_idx)
 {
 
   for (size_t i = 0; i < g->vertex_count; ++i) {
@@ -59,7 +59,8 @@ draw_graph(Graph* g)
 
   for (size_t i = 0; i < g->vertex_count; ++i) {
     Vector2 center = g->vertex_pos[i];
-    DrawCircle(center.x, center.y, VERTEX_RADIUS, BLACK);
+    DrawCircle(
+      center.x, center.y, VERTEX_RADIUS, i == highlight_idx ? BLUE : BLACK);
     DrawCircle(center.x, center.y, VERTEX_RADIUS - 2, g->vertex_color[i]);
     char buffer[20] = { 0 };
     sprintf(buffer, "%d", i);
@@ -129,8 +130,26 @@ add_step_color_vertex(Animation* a, size_t v, Color from, Color to)
 {
   Step step = { 0 };
   step.kind = COLOR_VERTEX;
-  step.as.color_vertex =
-    (Color_Vertex){ .vertex_idx = v, .from = from, .to = to };
+  step.as.color_vertex = (Color_Vertex){
+    .vertex_idx = v,
+    .from = from,
+    .to = to,
+  };
+  if (a->size == a->capacity) {
+    a->capacity = 2 * a->capacity + 1;
+    a->items = realloc(a->items, a->capacity * sizeof(a->items[0]));
+  }
+  a->items[a->size++] = step;
+}
+
+void
+add_step_check_vertex(Animation* a, size_t v)
+{
+  Step step = { 0 };
+  step.kind = CHECK_VERTEX;
+  step.as.check_vertex = (Check_Vertex){
+    .vertex_idx = v,
+  };
   if (a->size == a->capacity) {
     a->capacity = 2 * a->capacity + 1;
     a->items = realloc(a->items, a->capacity * sizeof(a->items[0]));
@@ -146,10 +165,12 @@ visit_bfs(Graph g, size_t s, Animation* a)
   enqueue(&q, s);
   while (q.end != q.start) {
     size_t v = dequeue(&q);
+    add_step_check_vertex(a, v);
     g.vertex_color[v] = GRAY;
     add_step_color_vertex(a, v, WHITE, GRAY);
     for (size_t i = 0; i < g.adj_count[v]; ++i) {
       size_t u = g.adj[v][i];
+      add_step_check_vertex(a, u);
       if (ColorToInt(g.vertex_color[u]) == ColorToInt(WHITE)) {
         enqueue(&q, u);
         g.vertex_color[u] = GRAY;
@@ -174,13 +195,15 @@ main(void)
               .vertex_color = { WHITE, WHITE } };
   Animation a = { 0 };
   size_t animation_idx = 0;
+  size_t highlight_idx = g.vertex_count;
 
   visit_bfs(g, 0, &a);
 
   SetTargetFPS(60);
   while (!WindowShouldClose()) {
 
-    if (IsKeyPressed(KEY_N)) {
+    if (IsKeyPressed(KEY_N) && animation_idx < a.size) {
+      highlight_idx = g.vertex_count;
       Step step = a.items[animation_idx++];
       switch (step.kind) {
         case COLOR_VERTEX: {
@@ -188,14 +211,19 @@ main(void)
           g.vertex_color[color_operation.vertex_idx] = color_operation.to;
         } break;
 
-        default:
-          break;
+        case CHECK_VERTEX: {
+          Check_Vertex check_operation = step.as.check_vertex;
+          highlight_idx = check_operation.vertex_idx;
+        } break;
+
+        default: {
+        } break;
       }
     }
 
     BeginDrawing();
     ClearBackground(RAYWHITE);
-    draw_graph(&g);
+    draw_graph(&g, highlight_idx);
     EndDrawing();
   }
 
