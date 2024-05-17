@@ -188,14 +188,18 @@ main(void)
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "graphz");
   font = GetFontDefault();
 
-  Graph g = { .vertex_count = 2,
-              .adj = { { 1 }, { 0 } },
-              .adj_count = { 1, 1 },
-              .vertex_pos = { { .x = 50, .y = 50 }, { .x = 100, .y = 100 } },
-              .vertex_color = { WHITE, WHITE } };
+  Graph g = { .vertex_count = 4,
+              .adj = { { 1, 2, 3 }, { 0 }, { 0 }, { 0 } },
+              .adj_count = { 3, 1, 1, 1 },
+              .vertex_pos = { { .x = 50, .y = 50 },
+                              { .x = 50, .y = 100 },
+                              { .x = 100, .y = 100 },
+                              { .x = 100, .y = 50 } },
+              .vertex_color = { WHITE, WHITE, WHITE, WHITE } };
   Animation a = { 0 };
   size_t animation_idx = 0;
   size_t highlight_idx = g.vertex_count;
+  size_t selected_vertex = g.vertex_count;
 
   visit_bfs(g, 0, &a);
 
@@ -219,6 +223,24 @@ main(void)
         default: {
         } break;
       }
+    }
+
+    int mx = GetMouseX(), my = GetMouseY();
+    if (selected_vertex < g.vertex_count) {
+      g.vertex_pos[selected_vertex].x = mx;
+      g.vertex_pos[selected_vertex].y = my;
+    } else if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+      for (size_t i = 0; i < g.vertex_count; ++i) {
+        Vector2 v_pos = g.vertex_pos[i];
+        if ((mx - v_pos.x) * (mx - v_pos.x) + (my - v_pos.y) * (my - v_pos.y) <=
+            VERTEX_RADIUS * VERTEX_RADIUS) {
+          selected_vertex = i;
+          break;
+        }
+      }
+    }
+    if (IsMouseButtonUp(MOUSE_BUTTON_LEFT)) {
+      selected_vertex = g.vertex_count;
     }
 
     BeginDrawing();
