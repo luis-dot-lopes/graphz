@@ -52,7 +52,10 @@ typedef struct
 } Graph;
 
 void
-draw_graph(Graph* g, size_t highlight_idx)
+draw_graph(Graph* g,
+           size_t highlight_idx,
+           size_t clicked_vertex1,
+           size_t clicked_vertex2)
 {
 
   for (size_t i = 0; i < g->vertex_count; ++i) {
@@ -65,8 +68,13 @@ draw_graph(Graph* g, size_t highlight_idx)
 
   for (size_t i = 0; i < g->vertex_count; ++i) {
     Vector2 center = g->vertex_pos[i];
-    DrawCircle(
-      center.x, center.y, VERTEX_RADIUS, i == highlight_idx ? BLUE : BLACK);
+    Color border_color = BLACK;
+    if (i == highlight_idx) {
+      border_color = BLUE;
+    } else if (i == clicked_vertex1 || i == clicked_vertex2) {
+      border_color = GREEN;
+    }
+    DrawCircle(center.x, center.y, VERTEX_RADIUS, border_color);
     DrawCircle(center.x, center.y, VERTEX_RADIUS - 2, g->vertex_color[i]);
     char buffer[20] = { 0 };
     sprintf(buffer, "%d", i);
@@ -168,6 +176,15 @@ free_animation(Animation* a)
 {
   a->capacity = a->size = 0;
   free(a->items);
+  a->items = NULL;
+}
+
+void
+paint_graph(Graph* g, Color color)
+{
+  for (size_t i = 0; i < g->vertex_count; ++i) {
+    g->vertex_color[i] = color;
+  }
 }
 
 // assumes graph is painted WHITE
@@ -237,8 +254,8 @@ main(void)
   font = GetFontDefault();
 
   Graph g = { .vertex_count = 4,
-              .adj = { { 1, 2, 3 }, { 0 }, { 0 }, { 0 } },
-              .adj_count = { 3, 1, 1, 1 },
+              .adj = { { 1, 2, 3 }, { 0, 2 }, { 0, 1 }, { 0 } },
+              .adj_count = { 3, 2, 2, 1 },
               .vertex_pos = { { .x = 50, .y = 50 },
                               { .x = 50, .y = 100 },
                               { .x = 100, .y = 100 },
@@ -246,10 +263,12 @@ main(void)
               .vertex_color = { WHITE, WHITE, WHITE, WHITE } };
   Animation a = { 0 };
   size_t animation_idx = 0;
-  size_t highlight_idx = g.vertex_count;
-  size_t selected_vertex = g.vertex_count;
+  size_t highlight_idx = MAX_VERTEX_COUNT + 1;
+  size_t selected_vertex = MAX_VERTEX_COUNT + 1;
+  size_t clicked_vertex1 = MAX_VERTEX_COUNT + 1;
+  size_t clicked_vertex2 = MAX_VERTEX_COUNT + 1;
 
-  paint_bipartite(g, 0, &a);
+  visit_bfs(g, 0, &a);
 
   SetTargetFPS(60);
   while (!WindowShouldClose()) {
@@ -271,6 +290,17 @@ main(void)
         default:
           break;
       }
+    } else if (IsKeyPressed(KEY_A) && g.vertex_count < MAX_VERTEX_COUNT) {
+      g.vertex_pos[g.vertex_count] =
+        (Vector2){ .x = SCREEN_WIDTH / 2, .y = SCREEN_HEIGHT / 2 };
+      g.vertex_color[g.vertex_count++] = WHITE;
+      clicked_vertex1 = clicked_vertex2 = selected_vertex =
+        MAX_VERTEX_COUNT + 1;
+    } else if (IsKeyPressed(KEY_R)) {
+      free_animation(&a);
+      animation_idx = 0;
+      paint_graph(&g, WHITE);
+      visit_bfs(g, 0, &a);
     }
 
     int mx = GetMouseX(), my = GetMouseY();
@@ -288,12 +318,37 @@ main(void)
       }
     }
     if (IsMouseButtonUp(MOUSE_BUTTON_LEFT)) {
-      selected_vertex = g.vertex_count;
+      selected_vertex = MAX_VERTEX_COUNT + 1;
+    }
+
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+      int found = 0;
+      for (size_t i = 0; i < g.vertex_count; ++i) {
+        Vector2 v_pos = g.vertex_pos[i];
+        if ((mx - v_pos.x) * (mx - v_pos.x) + (my - v_pos.y) * (my - v_pos.y) <=
+            VERTEX_RADIUS * VERTEX_RADIUS) {
+          if (clicked_vertex1 < g.vertex_count)
+            clicked_vertex2 = i;
+          else
+            clicked_vertex1 = i;
+          found = 1;
+          break;
+        }
+      }
+      if (!found) {
+        clicked_vertex1 = clicked_vertex2 = MAX_VERTEX_COUNT + 1;
+      }
+    }
+
+    if (clicked_vertex1 < g.vertex_count && clicked_vertex2 < g.vertex_count) {
+      g.adj[clicked_vertex1][g.adj_count[clicked_vertex1]++] = clicked_vertex2;
+      g.adj[clicked_vertex2][g.adj_count[clicked_vertex2]++] = clicked_vertex1;
+      clicked_vertex1 = clicked_vertex2 = MAX_VERTEX_COUNT + 1;
     }
 
     BeginDrawing();
     ClearBackground(RAYWHITE);
-    draw_graph(&g, highlight_idx);
+    draw_graph(&g, highlight_idx, clicked_vertex1, clicked_vertex2);
     EndDrawing();
   }
 
