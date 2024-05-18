@@ -16,7 +16,6 @@ typedef struct
   size_t* items;
   size_t start;
   size_t end;
-  size_t size;
   size_t capacity;
 } Queue;
 
@@ -34,6 +33,13 @@ size_t
 dequeue(Queue* q)
 {
   return q->items[q->start++];
+}
+
+void
+free_queue(Queue* q)
+{
+  q->start = q->end = q->capacity = 0;
+  free(q->items);
 }
 
 typedef struct
@@ -157,6 +163,13 @@ add_step_check_vertex(Animation* a, size_t v)
   a->items[a->size++] = step;
 }
 
+void
+free_animation(Animation* a)
+{
+  a->capacity = a->size = 0;
+  free(a->items);
+}
+
 // assumes graph is painted WHITE
 void
 visit_bfs(Graph g, size_t s, Animation* a)
@@ -180,6 +193,41 @@ visit_bfs(Graph g, size_t s, Animation* a)
     g.vertex_color[v] = RED;
     add_step_color_vertex(a, v, GRAY, RED);
   }
+  free_queue(&q);
+}
+
+// Uses a BLACK vertex to indicate failure
+void
+paint_bipartite(Graph g, size_t s, Animation* a)
+{
+  Queue q = { 0 };
+  enqueue(&q, s);
+  g.vertex_color[s] = BLUE;
+  add_step_color_vertex(a, s, WHITE, BLUE);
+  while (q.end != q.start) {
+    size_t v = dequeue(&q);
+    add_step_check_vertex(a, v);
+    for (size_t i = 0; i < g.adj_count[v]; ++i) {
+      size_t u = g.adj[v][i];
+      add_step_check_vertex(a, u);
+      if (ColorToInt(g.vertex_color[u]) == ColorToInt(WHITE)) {
+        if (ColorToInt(g.vertex_color[v]) == ColorToInt(BLUE)) {
+          g.vertex_color[u] = RED;
+          add_step_color_vertex(a, u, WHITE, RED);
+        } else if (ColorToInt(g.vertex_color[v]) == ColorToInt(RED)) {
+          g.vertex_color[u] = BLUE;
+          add_step_color_vertex(a, u, WHITE, BLUE);
+        }
+        enqueue(&q, u);
+      } else if (ColorToInt(g.vertex_color[v]) ==
+                 ColorToInt(g.vertex_color[u])) {
+        add_step_color_vertex(a, u, g.vertex_color[u], BLACK);
+        free_queue(&q);
+        return;
+      }
+    }
+  }
+  free_queue(&q);
 }
 
 int
@@ -201,7 +249,7 @@ main(void)
   size_t highlight_idx = g.vertex_count;
   size_t selected_vertex = g.vertex_count;
 
-  visit_bfs(g, 0, &a);
+  paint_bipartite(g, 0, &a);
 
   SetTargetFPS(60);
   while (!WindowShouldClose()) {
@@ -220,8 +268,8 @@ main(void)
           highlight_idx = check_operation.vertex_idx;
         } break;
 
-        default: {
-        } break;
+        default:
+          break;
       }
     }
 
@@ -248,6 +296,8 @@ main(void)
     draw_graph(&g, highlight_idx);
     EndDrawing();
   }
+
+  free_animation(&a);
 
   return 0;
 }
