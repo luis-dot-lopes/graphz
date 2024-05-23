@@ -213,6 +213,32 @@ visit_bfs(Graph g, size_t s, Animation* a)
   free_queue(&q);
 }
 
+void
+visit_dfs(Graph g, size_t s, Animation* a)
+{
+  size_t stack[MAX_VERTEX_COUNT];
+  size_t stack_size = 0;
+  stack[stack_size++] = s;
+  while (stack_size != 0) {
+    size_t v = stack[stack_size - 1];
+    add_step_check_vertex(a, v);
+    g.vertex_color[v] = GRAY;
+    add_step_color_vertex(a, v, WHITE, GRAY);
+    for (size_t i = 0; i < g.adj_count[v]; ++i) {
+      size_t u = g.adj[v][i];
+      add_step_check_vertex(a, u);
+      if (ColorToInt(g.vertex_color[u]) == ColorToInt(WHITE)) {
+        stack[stack_size++] = u;
+        goto next;
+      }
+    }
+    --stack_size;
+    g.vertex_color[v] = RED;
+    add_step_color_vertex(a, v, GRAY, RED);
+  next:;
+  }
+}
+
 // Uses a BLACK vertex to indicate failure
 void
 paint_bipartite(Graph g, size_t s, Animation* a)
@@ -268,7 +294,7 @@ main(void)
   size_t clicked_vertex1 = MAX_VERTEX_COUNT + 1;
   size_t clicked_vertex2 = MAX_VERTEX_COUNT + 1;
 
-  visit_bfs(g, 0, &a);
+  visit_dfs(g, 0, &a);
 
   SetTargetFPS(60);
   while (!WindowShouldClose()) {
@@ -300,7 +326,7 @@ main(void)
       free_animation(&a);
       animation_idx = 0;
       paint_graph(&g, WHITE);
-      visit_bfs(g, 0, &a);
+      visit_dfs(g, 0, &a);
     }
 
     int mx = GetMouseX(), my = GetMouseY();
