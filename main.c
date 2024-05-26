@@ -1,4 +1,5 @@
 #include <raylib.h>
+#include <raymath.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -8,6 +9,7 @@
 #define MAX_VERTEX_COUNT 30
 
 #define VERTEX_RADIUS 12
+#define ARROW_LENGTH 8
 
 Font font;
 
@@ -63,6 +65,50 @@ draw_graph(Graph* g,
       Vector2 c1 = g->vertex_pos[i];
       Vector2 c2 = g->vertex_pos[g->adj[i][j]];
       DrawLine(c1.x, c1.y, c2.x, c2.y, BLACK);
+    }
+  }
+
+  for (size_t i = 0; i < g->vertex_count; ++i) {
+    Vector2 center = g->vertex_pos[i];
+    Color border_color = BLACK;
+    if (i == highlight_idx) {
+      border_color = BLUE;
+    } else if (i == clicked_vertex1 || i == clicked_vertex2) {
+      border_color = GREEN;
+    }
+    DrawCircle(center.x, center.y, VERTEX_RADIUS, border_color);
+    DrawCircle(center.x, center.y, VERTEX_RADIUS - 2, g->vertex_color[i]);
+    char buffer[20] = { 0 };
+    sprintf(buffer, "%d", i);
+    Vector2 text_size = MeasureTextEx(font, buffer, VERTEX_RADIUS * 1.2f, 0.0f);
+    DrawText(buffer,
+             center.x - text_size.x * 0.5f,
+             center.y - text_size.y * 0.5f,
+             VERTEX_RADIUS * 1.2f,
+             BLACK);
+  }
+}
+
+void
+draw_directed_graph(Graph* g,
+                    size_t highlight_idx,
+                    size_t clicked_vertex1,
+                    size_t clicked_vertex2)
+{
+  for (size_t i = 0; i < g->vertex_count; ++i) {
+    for (size_t j = 0; j < g->adj_count[i]; ++j) {
+      Vector2 c1 = g->vertex_pos[i];
+      Vector2 c2 = g->vertex_pos[g->adj[i][j]];
+      Vector2 unit_line = Vector2Normalize(Vector2Subtract(c1, c2));
+      Vector2 touch_point =
+        Vector2Add(c2, Vector2Scale(unit_line, VERTEX_RADIUS));
+      Vector2 arrow1 =
+        Vector2Scale(Vector2Rotate(unit_line, DEG2RAD * 30.0f), ARROW_LENGTH);
+      Vector2 arrow2 =
+        Vector2Scale(Vector2Rotate(unit_line, DEG2RAD * -30.0f), ARROW_LENGTH);
+      DrawLine(c1.x, c1.y, c2.x, c2.y, BLACK);
+      DrawLineV(touch_point, Vector2Add(touch_point, arrow1), BLACK);
+      DrawLineV(touch_point, Vector2Add(touch_point, arrow2), BLACK);
     }
   }
 
