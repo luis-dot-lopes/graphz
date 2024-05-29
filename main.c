@@ -218,6 +218,22 @@ add_step_check_vertex(Animation* a, size_t v)
 }
 
 void
+add_step_add_edge(Animation* a, size_t v, size_t u)
+{
+  Step step = { 0 };
+  step.kind = ADD_EDGE;
+  step.as.add_edge = (Add_Edge){
+    .vertex1 = v,
+    .vertex2 = u,
+  };
+  if (a->size == a->capacity) {
+    a->capacity = 2 * a->capacity + 1;
+    a->items = realloc(a->items, a->capacity * sizeof(a->items[0]));
+  }
+  a->items[a->size++] = step;
+}
+
+void
 free_animation(Animation* a)
 {
   a->capacity = a->size = 0;
@@ -319,6 +335,44 @@ paint_bipartite(Graph g, size_t s, Animation* a)
   free_queue(&q);
 }
 
+void
+make_graph_connected(Graph g, Animation* a)
+{
+  Queue q = { 0 };
+  size_t least_white = 0;
+  size_t connect1 = g.vertex_count, connect2 = g.vertex_count;
+  while (least_white < g.vertex_count) {
+    if (ColorToInt(g.vertex_color[least_white]) == ColorToInt(WHITE)) {
+      connect1 = connect2;
+      connect2 = least_white;
+      if (connect1 < g.vertex_count && connect2 < g.vertex_count) {
+        add_step_add_edge(a, connect1, connect2);
+        add_step_add_edge(a, connect2, connect1);
+      }
+      enqueue(&q, least_white);
+      while (q.end != q.start) {
+        size_t v = dequeue(&q);
+        add_step_check_vertex(a, v);
+        g.vertex_color[v] = GRAY;
+        add_step_color_vertex(a, v, WHITE, GRAY);
+        for (size_t i = 0; i < g.adj_count[v]; ++i) {
+          size_t u = g.adj[v][i];
+          add_step_check_vertex(a, u);
+          if (ColorToInt(g.vertex_color[u]) == ColorToInt(WHITE)) {
+            enqueue(&q, u);
+            g.vertex_color[u] = GRAY;
+            add_step_color_vertex(a, u, WHITE, GRAY);
+          }
+        }
+        g.vertex_color[v] = RED;
+        add_step_color_vertex(a, v, GRAY, RED);
+      }
+    }
+    ++least_white;
+  }
+  free_queue(&q);
+}
+
 int
 main(void)
 {
@@ -340,7 +394,7 @@ main(void)
   size_t clicked_vertex1 = MAX_VERTEX_COUNT + 1;
   size_t clicked_vertex2 = MAX_VERTEX_COUNT + 1;
 
-  visit_dfs(g, 0, &a);
+  make_graph_connected(g, &a);
 
   SetTargetFPS(60);
   while (!WindowShouldClose()) {
@@ -359,6 +413,16 @@ main(void)
           highlight_idx = check_operation.vertex_idx;
         } break;
 
+        case ADD_EDGE: {
+          Add_Edge add_edge_operation = step.as.add_edge;
+          size_t v = add_edge_operation.vertex1, u = add_edge_operation.vertex2;
+          if (g.adj_count[v] < MAX_VERTEX_COUNT) {
+            g.adj[v][g.adj_count[v]++] = u;
+          } else {
+            TraceLog(LOG_ERROR, "Too many edges. Animation step skipped");
+          }
+        } break;
+
         default:
           break;
       }
@@ -372,7 +436,7 @@ main(void)
       free_animation(&a);
       animation_idx = 0;
       paint_graph(&g, WHITE);
-      visit_dfs(g, 0, &a);
+      make_graph_connected(g, &a);
     }
 
     int mx = GetMouseX(), my = GetMouseY();
